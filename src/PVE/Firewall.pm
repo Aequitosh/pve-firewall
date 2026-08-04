@@ -1110,19 +1110,43 @@ sub parse_address_list {
     return $ipversion;
 }
 
+=head3 resolve_port_alias($alias)
+
+Resolves the name of a port alias to its numerical value, independent of
+protocol. Throws an error if the alias does not exist in the services DB.
+
+=cut
+
+sub resolve_port_alias {
+    my ($alias, $services) = @_;
+
+    $services = $services // PVE::Firewall::get_etc_services();
+    my $service = $services->{byname}->{$alias};
+
+    die "invalid port '$alias'\n" if !$service;
+
+    return $service->{port};
+}
+
 # $dport must only be set to 1 if the parsed parameter is dport and the
 # protocol is one of the ICMP variants - ICMP type values used to be stored in
 # the dport parameter.
 sub parse_port_name_number_or_range {
-    my ($str, $dport) = @_;
+    my ($str, $dport, $resolve_aliases) = @_;
+
+    my @elements;
+    return @elements if !defined($str) || $str eq '';
 
     my $services = PVE::Firewall::get_etc_services();
     my $count = 0;
     my $icmp_port = 0;
 
-    my @elements = split(/,/, $str);
+    @elements = split(/,/, $str);
     die "extraneous commas in list\n" if $str ne join(',', @elements);
-    foreach my $item (@elements) {
+
+    for my $i (0 .. $#elements) {
+        my $item = $elements[$i];
+
         if ($item =~ m/^([0-9]+):([0-9]+)$/) {
             $count += 2;
             my ($port1, $port2) = ($1, $2);
@@ -1140,7 +1164,10 @@ sub parse_port_name_number_or_range {
             } elsif ($dport && $icmpv6_type_names->{$item}) {
                 $icmp_port = 1;
             } else {
-                die "invalid port '$item'\n" if !$services->{byname}->{$item};
+                # unconditionally resolve in order to validate the alias.
+                my $resolved_port = resolve_port_alias($item, $services);
+
+                $elements[$i] = $resolved_port if $resolve_aliases;
             }
         }
     }
@@ -1153,7 +1180,7 @@ sub parse_port_name_number_or_range {
     die "too many entries in port list (> 15 numbers)\n"
         if $count > 15;
 
-    return (scalar(@elements) > 1);
+    return @elements;
 }
 
 PVE::JSONSchema::register_format('pve-fw-conntrack-helper', \&pve_fw_verify_conntrack_helper);
@@ -2310,41 +2337,50 @@ sub ipt_rule_to_cmds {
         if (my $proto = $rule->{proto}) {
             push @match, "-p $proto";
             my $is_icmp = $proto_is_icmp->($proto);
+            my $is_udplite = $proto eq 'udplite' || $proto eq '136';
 
-            my $multidport = defined($rule->{dport})
-                && parse_port_name_number_or_range($rule->{dport}, $is_icmp);
-            my $multisport =
-                defined($rule->{sport}) && parse_port_name_number_or_range($rule->{sport}, 0);
+            my @dports =
+                eval { parse_port_name_number_or_range($rule->{dport}, $is_icmp, 1) };
+            die "invalid dport definition: $rule->{dport}: $@" if $@;
+            my $multidport = scalar(@dports) > 1 || $is_udplite;
+            my $dport_string = join(',', @dports);
+
+            my @sports =
+                eval { parse_port_name_number_or_range($rule->{sport}, 0, 1) };
+            die "invalid sport definition: $rule->{sport}: $@" if $@;
+            my $multisport = scalar(@sports) > 1 || $is_udplite;
+            my $sport_string = join(',', @sports);
 
             my $add_dport = sub {
-                return if !defined($rule->{dport});
+                return if !@dports;
 
                 # NOTE: we re-use dport to store --icmp-type for icmp* protocol
                 if ($proto eq 'icmp') {
-                    $is_valid_icmp_type->($rule->{dport}, $icmp_type_names);
-                    push @match, "-m icmp --icmp-type $rule->{dport}";
+                    $is_valid_icmp_type->($dport_string, $icmp_type_names);
+                    push @match, "-m icmp --icmp-type $dport_string";
                 } elsif ($proto eq 'icmpv6') {
-                    $is_valid_icmp_type->($rule->{dport}, $icmpv6_type_names);
-                    push @match, "-m icmpv6 --icmpv6-type $rule->{dport}";
+                    $is_valid_icmp_type->($dport_string, $icmpv6_type_names);
+                    push @match, "-m icmpv6 --icmpv6-type $dport_string";
                 } elsif (!$PROTOCOLS_WITH_PORTS->{$proto}) {
                     die "protocol $proto does not have ports\n";
                 } elsif ($multidport) {
-                    push @match, "--match multiport", "--dports $rule->{dport}";
+                    push @match, "--match multiport", "--dports $dport_string";
                 } else {
-                    return if !$rule->{dport};
-                    push @match, "--dport $rule->{dport}";
+                    push @match, "--dport $dport_string";
                 }
+
             };
 
             my $add_sport = sub {
-                return if !$rule->{sport};
+                return if !@sports;
 
                 die "protocol $proto does not have ports\n"
                     if !$PROTOCOLS_WITH_PORTS->{$proto};
+
                 if ($multisport) {
-                    push @match, "--match multiport", "--sports $rule->{sport}";
+                    push @match, "--match multiport", "--sports $sport_string";
                 } else {
-                    push @match, "--sport $rule->{sport}";
+                    push @match, "--sport $sport_string";
                 }
             };
 

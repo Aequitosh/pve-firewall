@@ -1,4 +1,4 @@
-TESTS = test_parse_address_list
+TESTS = test_parse_address_list test_ipt_rule_to_cmds
 
 .PHONY: all test $(TESTS) clean
 all: test
