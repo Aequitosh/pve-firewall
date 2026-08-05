@@ -113,6 +113,38 @@ sub clean_cidr {
     return "${clean_ip}/$len";
 }
 
+# iptables interprets zero-padded IPv4 octets as octal, including in dotted masks.
+our $IPV4_OCTET = "(?:25[0-5]|(?:2[0-4]|1[0-9]|[1-9])?[0-9]|0+[0-3]?[0-7]{1,2})";
+our $IPV4_SHORT_FORM_RE = "(?:(?:$IPV4_OCTET\\.){0,3}$IPV4_OCTET)";
+
+sub fw_parse_source_dest_ip {
+    my ($source_dest) = @_;
+
+    if ($source_dest =~ m!^($IPV4_SHORT_FORM_RE|$IPV6RE)\z!) {
+        return Net::IP->new($source_dest);
+    }
+
+    return undef;
+}
+
+sub fw_parse_source_dest_cidr {
+    my ($source_dest) = @_;
+
+    if ($source_dest =~ m!^($IPV4_SHORT_FORM_RE)/(\S+)\z!) {
+        my $mask = $2;
+        return undef
+            if !($mask =~ m!^\d+\z! && $mask <= 32)
+            && $mask !~ m!^(?:$IPV4_OCTET\.){3}$IPV4_OCTET\z!;
+    } elsif ($source_dest =~ m!^($IPV6RE)/(\S+)\z!) {
+        my $mask = $2;
+        return undef if !($mask =~ m!^\d+\z! && $mask <= 128) && $mask !~ m!^$IPV6RE\z!;
+    } else {
+        return undef;
+    }
+
+    return Net::IP->new($source_dest);
+}
+
 PVE::JSONSchema::register_standard_option(
     'ipset-name',
     {
@@ -1082,6 +1114,8 @@ sub parse_address_list {
         return;
     }
 
+    die "must not contain newlines\n" if $str =~ /\n/;
+
     my $count = 0;
     my $iprange = 0;
     my $ipversion;
@@ -1090,22 +1124,36 @@ sub parse_address_list {
     die "extraneous commas in list\n" if $str ne join(',', @elements);
     foreach my $elem (@elements) {
         $count++;
+
+        my @parts = split(/-/, $elem);
+        die "not a valid ip or ip range\n" if scalar(@parts) > 2;
+        $iprange = 1 if scalar(@parts) == 2;
+
+        die "you can't use a range in a list\n" if $iprange && $count > 1;
+
+        for my $part (@parts) {
+            chomp($part);
+
+            my $ip = fw_parse_source_dest_ip($part);
+            die "element in IP range must be a single IP\n" if !$ip && $iprange;
+
+            $ip = fw_parse_source_dest_cidr($part) if !$ip;
+            die "not a valid IP or CIDR: $part\n" if !$ip;
+
+            die "detected mixed ipv4/ipv6 addresses in address list '$str'\n"
+                if $ipversion && ($ip->version() != $ipversion);
+
+            $ipversion = $ip->version();
+        }
+
+        # Net::IP also checks address ordering in ranges and canonical prefixes. Keep those
+        # constraints in addition to validating the syntax accepted by iptables.
         my $ip = Net::IP->new($elem);
         if (!$ip) {
             my $err = Net::IP::Error();
             die "invalid IP address: $err\n";
         }
-        $iprange = 1 if $elem =~ m/-/;
-
-        my $new_ipversion = Net::IP::ip_is_ipv6($ip->ip()) ? 6 : 4;
-
-        die "detected mixed ipv4/ipv6 addresses in address list '$str'\n"
-            if $ipversion && ($new_ipversion != $ipversion);
-
-        $ipversion = $new_ipversion;
     }
-
-    die "you can't use a range in a list\n" if $iprange && $count > 1;
 
     return $ipversion;
 }
