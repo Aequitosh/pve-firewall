@@ -48,6 +48,9 @@ clean:
 	rm -f *~
 	rm -rf pvefw-logger
 
+.PHONY: test
+test:
+	$(MAKE) -C $@
 
 .PHONY: distclean
 distclean: clean

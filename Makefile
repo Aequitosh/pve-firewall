@@ -47,6 +47,7 @@ sbuild: $(DSC)
 
 check:
 	make -C test check
+	$(MAKE) -C src test
 
 .PHONY: clean distclean
 distclean: clean
