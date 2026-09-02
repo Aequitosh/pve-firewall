@@ -4530,7 +4530,13 @@ sub compile_iptables_filter {
                 $ruleset, $hostfw_conf, $cluster_conf, $ipversion, $corosync_conf,
             );
         };
-        warn $@ if $@; # just to be sure - should not happen
+        if ($@) {
+            if ($verbose) { # running from cli
+                warn $@;
+            } else {
+                syslog('warn', "$@\n");
+            }
+        }
     }
 
     # generate firewall rules for QEMU VMs
@@ -4623,7 +4629,14 @@ sub compile_iptables_filter {
                 );
             }
         };
-        warn $@ if $@; # just to be sure - should not happen
+
+        if ($@) {
+            if ($verbose) { # running from cli
+                warn $@;
+            } else {
+                syslog('warn', "$@\n");
+            }
+        }
     }
 
     if (ruleset_chain_exist($ruleset, "PVEFW-IPS")) {
@@ -4711,7 +4724,14 @@ sub compile_ipsets {
                 $implicit_sets,
             );
         };
-        warn $@ if $@; # just to be sure - should not happen
+
+        if ($@) {
+            if ($verbose) { # running from cli
+                warn $@;
+            } else {
+                syslog('warn', "$@\n");
+            }
+        }
     }
 
     # generate firewall rules for LXC containers
@@ -4768,7 +4788,14 @@ sub compile_ipsets {
                 $implicit_sets,
             );
         };
-        warn $@ if $@; # just to be sure - should not happen
+
+        if ($@) {
+            if ($verbose) { # running from cli
+                warn $@;
+            } else {
+                syslog('warn', "$@\n");
+            }
+        }
     }
 
     generate_ipset_chains($ipset_ruleset, undef, $cluster_conf, undef, $cluster_conf->{ipset});
@@ -4828,7 +4855,14 @@ sub compile_ebtables_filter {
                 );
             }
         };
-        warn $@ if $@; # just to be sure - should not happen
+
+        if ($@) {
+            if ($verbose) { # running from cli
+                warn $@;
+            } else {
+                syslog('warn', "$@\n");
+            }
+        }
     }
 
     # generate firewall rules for LXC containers
@@ -4868,7 +4902,14 @@ sub compile_ebtables_filter {
                 );
             }
         };
-        warn $@ if $@; # just to be sure - should not happen
+
+        if ($@) {
+            if ($verbose) { # running from cli
+                warn $@;
+            } else {
+                syslog('warn', "$@\n");
+            }
+        }
     }
 
     return $ruleset;
