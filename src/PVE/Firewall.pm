@@ -2091,34 +2091,89 @@ sub iptables_restore_cmdlist {
     my ($cmdlist, $table) = @_;
 
     $table = 'filter' if !$table;
-    run_command(
-        ['iptables-restore', '-T', $table, '-n'],
-        input => $cmdlist,
-        errmsg => "iptables_restore_cmdlist",
-    );
+
+    my $error;
+    my $res = eval {
+        run_command(
+            ['iptables-restore', '-T', $table, '-n'],
+            input => $cmdlist,
+            errmsg => "iptables_restore_cmdlist",
+            errfunc => sub {
+                $error .= shift;
+            },
+        );
+    };
+
+    if (my $err = $@) {
+        die(($error // '') . $err);
+    }
+    return $res;
 }
 
 sub ip6tables_restore_cmdlist {
     my ($cmdlist, $table) = @_;
 
     $table = 'filter' if !$table;
-    run_command(
-        ['ip6tables-restore', '-T', $table, '-n'],
-        input => $cmdlist,
-        errmsg => "iptables_restore_cmdlist",
-    );
+
+    my $error;
+    my $res = eval {
+        run_command(
+            ['ip6tables-restore', '-T', $table, '-n'],
+            input => $cmdlist,
+            errmsg => "iptables_restore_cmdlist",
+            errfunc => sub {
+                $error .= shift;
+            },
+        );
+    };
+
+    if (my $err = $@) {
+        die(($error // '') . $err);
+    }
+    return $res;
 }
 
 sub ipset_restore_cmdlist {
     my ($cmdlist) = @_;
 
-    run_command(['ipset', 'restore'], input => $cmdlist, errmsg => "ipset_restore_cmdlist");
+    my $error;
+    my $res = eval {
+        run_command(
+            ['ipset', 'restore'],
+            input => $cmdlist,
+            errmsg => "ipset_restore_cmdlist",
+            errfunc => sub {
+                $error .= shift;
+            },
+        );
+    };
+
+    if (my $err = $@) {
+        die(($error // '') . $err);
+    }
+    return $res;
 }
 
 sub ebtables_restore_cmdlist {
     my ($cmdlist) = @_;
 
-    run_command(['ebtables-restore'], input => $cmdlist, errmsg => "ebtables_restore_cmdlist");
+    my $error;
+    my $res = eval {
+        run_command(
+            ['ebtables-restore'],
+            input => $cmdlist,
+            errmsg => "ebtables_restore_cmdlist",
+            errfunc => sub {
+                $error .= shift;
+            },
+
+        );
+    };
+
+    if (my $err = $@) {
+        die(($error // '') . $err);
+    }
+    return $res;
 }
 
 sub iptables_get_chains {
