@@ -973,6 +973,29 @@ sub get_etc_protocols {
     return $data;
 }
 
+=head3 resolve_protocol($protocol)
+
+Resolves a protocol definition from a rule to its numerical value. It checks
+whether the value is already numeric and contained in the protocols DB or if
+the name is contained in the database. In both cases it returns the numerical
+value that corresponds to the value in the IP header for that protocol.
+
+If the supplied value is neither a valid protocol ID, nor a valid protocol name
+then an error is thrown.
+
+=cut
+
+sub resolve_protocol {
+    my ($protocol) = @_;
+
+    my $protocols = get_etc_protocols();
+
+    return $protocol if defined($protocols->{byid}->{$protocol});
+    return $protocols->{byname}->{$protocol}->{id} if defined($protocols->{byname}->{$protocol});
+
+    die "unable to resolve protocol: $protocol";
+}
+
 my $etc_ethertypes;
 
 sub get_etc_ethertypes {
@@ -2344,7 +2367,9 @@ sub ipt_rule_to_cmds {
         }
 
         if (my $proto = $rule->{proto}) {
-            push @match, "-p $proto";
+            my $protocol_id = resolve_protocol($proto);
+            push @match, "-p $protocol_id";
+
             my $is_icmp = $proto_is_icmp->($proto);
             my $is_udplite = $proto eq 'udplite' || $proto eq '136';
 

@@ -9,8 +9,11 @@ use Test::More;
 
 use PVE::Firewall;
 
+my $protocol_ids = { tcp => 6, udp => 17, sctp => 132, udplite => 136, icmp => 1, icmpv6 => 58 };
+
 for my $ipversion (4, 6) {
     for my $proto ('udplite', '136') {
+        my $id = $protocol_ids->{$proto} // $proto;
         for my $sport (undef, '0', '1234', '1234:1236', '1234,1236') {
             for my $dport (undef, '0', '4321', '4321:4323', '4321,4323') {
                 my $line = "IN ACCEPT -p $proto";
@@ -20,7 +23,7 @@ for my $ipversion (4, 6) {
                 my $rule = PVE::Firewall::parse_fw_rule('test', $line, {}, {}, 'host');
                 ok(!$rule->{errors}, "IPv$ipversion: validate $line");
 
-                my $expected = "-A TEST -p $proto";
+                my $expected = "-A TEST -p $id";
                 $expected .= " --match multiport --dports $dport" if defined($dport);
                 $expected .= " --match multiport --sports $sport" if defined($sport);
                 $expected .= ' -j ACCEPT';
@@ -35,28 +38,31 @@ for my $ipversion (4, 6) {
     }
 
     for my $proto ('tcp', '6', 'udp', '17') {
+        my $id = $protocol_ids->{$proto} // $proto;
         my $rule = { proto => $proto, sport => '1234', dport => '4321', action => 'ACCEPT' };
         is_deeply(
             [PVE::Firewall::ipt_rule_to_cmds($rule, 'TEST', $ipversion, {}, {})],
-            ["-A TEST -p $proto --sport 1234 --dport 4321 -j ACCEPT"],
+            ["-A TEST -p $id --sport 1234 --dport 4321 -j ACCEPT"],
             "IPv$ipversion: $proto single ports do not need multiport",
         );
     }
 }
 
 for my $proto ('icmp', 'icmpv6') {
+    my $id = $protocol_ids->{$proto};
     my $version = $proto eq 'icmp' ? 4 : 6;
     my $type = $proto eq 'icmp' ? 'icmp-type' : 'icmpv6-type';
     my $rule = PVE::Firewall::parse_fw_rule('test', "IN ACCEPT -p $proto -dport 0", {}, {}, 'host');
     ok(!$rule->{errors}, "$proto accepts type zero");
     is_deeply(
         [PVE::Firewall::ipt_rule_to_cmds($rule, 'TEST', $version, {}, {})],
-        ["-A TEST -p $proto -m $proto --$type 0 -j ACCEPT"],
+        ["-A TEST -p $id -m $proto --$type 0 -j ACCEPT"],
         "$proto preserves type zero restriction",
     );
 }
 
 for my $proto ('tcp', 'udp', 'sctp', 'udplite', '136') {
+    my $id = $protocol_ids->{$proto} // $proto;
     my $rule = { proto => $proto, sport => '0', dport => '0', action => 'ACCEPT' };
     my $ports =
         $proto eq 'udplite' || $proto eq '136'
@@ -64,7 +70,7 @@ for my $proto ('tcp', 'udp', 'sctp', 'udplite', '136') {
         : '--sport 0 --dport 0';
     is_deeply(
         [PVE::Firewall::ipt_rule_to_cmds($rule, 'TEST', 4, {}, {})],
-        ["-A TEST -p $proto $ports -j ACCEPT"],
+        ["-A TEST -p $id $ports -j ACCEPT"],
         "$proto preserves zero source and destination ports",
     );
 
@@ -76,7 +82,7 @@ for my $proto ('tcp', 'udp', 'sctp', 'udplite', '136') {
         : '--sport 22 --dport 67';
     is_deeply(
         [PVE::Firewall::ipt_rule_to_cmds($rule, 'TEST', 4, {}, {})],
-        ["-A TEST -p $proto $ports -j ACCEPT"],
+        ["-A TEST -p $id $ports -j ACCEPT"],
         "$proto resolves port aliases independently of the service protocol",
     );
 }

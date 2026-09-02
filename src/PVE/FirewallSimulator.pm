@@ -168,9 +168,10 @@ sub rule_match {
             next;
         }
 
-        if ($rule =~ s/^-p (tcp|udp|igmp|icmp)\s*//) {
-            die "missing proto" if !$pkg->{proto};
-            return undef if $pkg->{proto} ne $1; # no match
+        if ($rule =~ s/^-p (\S+)\s*//) {
+            my $protocol = PVE::Firewall::resolve_protocol($1);
+            die "missing proto" if !defined($pkg->{proto}) || $pkg->{proto} eq '';
+            return undef if PVE::Firewall::resolve_protocol($pkg->{proto}) ne $protocol;
             next;
         }
 
