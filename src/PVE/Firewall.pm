@@ -3833,7 +3833,7 @@ my $format_rules = sub {
                 if $rule->{comment} && $rule->{comment} !~ m/^\s*$/;
             $raw .= "\n";
         } else {
-            die "unknown rule type '$rule->{type}'";
+            warn "unknown rule type '$rule->{type}'";
         }
     }
 
