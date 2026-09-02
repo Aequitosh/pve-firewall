@@ -8,6 +8,7 @@ use Encode;
 use File::Basename;
 use File::Path;
 use IO::File;
+use JSON;
 use Net::IP;
 use POSIX;
 use Socket qw(AF_INET AF_INET6 inet_ntop inet_pton);
@@ -22,7 +23,7 @@ use PVE::Network;
 use PVE::ProcFSTools;
 use PVE::SafeSyslog;
 use PVE::Tools qw($IPV4RE $IPV6RE);
-use PVE::Tools qw(run_command lock_file dir_glob_foreach);
+use PVE::Tools qw(run_command lock_file dir_glob_foreach file_get_contents);
 
 use PVE::Firewall::Helpers;
 use PVE::RS::Firewall::SDN;
@@ -940,67 +941,21 @@ sub get_macros {
     return wantarray ? ($pve_fw_parsed_macros, $pve_fw_macro_descr) : $pve_fw_parsed_macros;
 }
 
+my $FIREWALL_DATA_FOLDER = "/usr/share/proxmox-firewall/data";
+
 my $etc_services;
 
 sub get_etc_services {
-
     return $etc_services if $etc_services;
 
-    my $filename = "/etc/services";
+    my $data = from_json(
+        PVE::Tools::file_get_contents("$FIREWALL_DATA_FOLDER/services.json"),
+        { utf8 => 1 },
+    );
 
-    my $fh = IO::File->new($filename, O_RDONLY);
-    if (!$fh) {
-        warn "unable to read '$filename' - $!\n";
-        return {};
-    }
+    $etc_services = $data;
 
-    my $services = {};
-
-    while (my $line = <$fh>) {
-        chomp($line);
-        next if $line =~ m/^#/;
-        next if ($line =~ m/^\s*$/);
-
-        if ($line =~ m!^(\S+)\s+(\S+)/(tcp|udp|sctp).*$!) {
-            $services->{byid}->{$2}->{name} = $1;
-            $services->{byid}->{$2}->{port} = $2;
-            $services->{byid}->{$2}->{$3} = 1;
-            $services->{byname}->{$1} = $services->{byid}->{$2};
-        }
-    }
-
-    close($fh);
-
-    $etc_services = $services;
-
-    return $etc_services;
-}
-
-sub parse_protocol_file {
-    my ($filename) = @_;
-
-    my $fh = IO::File->new($filename, O_RDONLY);
-    if (!$fh) {
-        warn "unable to read '$filename' - $!\n";
-        return {};
-    }
-
-    my $protocols = {};
-
-    while (my $line = <$fh>) {
-        chomp($line);
-        next if $line =~ m/^#/;
-        next if ($line =~ m/^\s*$/);
-
-        if ($line =~ m!^(\S+)\s+(\d+)(?:\s+.*)?$!) {
-            $protocols->{byid}->{$2}->{name} = $1;
-            $protocols->{byname}->{$1} = $protocols->{byid}->{$2};
-        }
-    }
-
-    close($fh);
-
-    return $protocols;
+    return $data;
 }
 
 my $etc_protocols;
@@ -1008,23 +963,29 @@ my $etc_protocols;
 sub get_etc_protocols {
     return $etc_protocols if $etc_protocols;
 
-    my $protocols = parse_protocol_file('/etc/protocols');
+    my $data = from_json(
+        PVE::Tools::file_get_contents("$FIREWALL_DATA_FOLDER/protocols.json"),
+        { utf8 => 1 },
+    );
 
-    # add special case for ICMP v6
-    $protocols->{byid}->{icmpv6}->{name} = "icmpv6";
-    $protocols->{byname}->{icmpv6} = $protocols->{byid}->{icmpv6};
+    $etc_protocols = $data;
 
-    $etc_protocols = $protocols;
-
-    return $etc_protocols;
+    return $data;
 }
 
 my $etc_ethertypes;
 
 sub get_etc_ethertypes {
-    $etc_ethertypes = parse_protocol_file('/etc/ethertypes')
-        if !$etc_ethertypes;
-    return $etc_ethertypes;
+    return $etc_ethertypes if $etc_ethertypes;
+
+    my $data = from_json(
+        PVE::Tools::file_get_contents("$FIREWALL_DATA_FOLDER/ethertypes.json"),
+        { utf8 => 1 },
+    );
+
+    $etc_ethertypes = $data;
+
+    return $data;
 }
 
 my $__local_network;
