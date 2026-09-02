@@ -2948,6 +2948,20 @@ sub generate_tap_rules_direction {
     }
 }
 
+sub valid_interface_name {
+    my ($iface) = @_;
+
+    return 1 if length($iface) <= 15;
+
+    my $error = "invalid interface name: '$iface' - skipping rule generation\n";
+    if ($verbose) {
+        warn $error;
+    } else {
+        syslog('warning', $error);
+    }
+    return 0;
+}
+
 sub enable_host_firewall {
     my ($ruleset, $hostfw_conf, $cluster_conf, $ipversion, $corosync_conf) = @_;
 
@@ -3006,7 +3020,9 @@ sub enable_host_firewall {
         next if $rule->{ipversion} && ($rule->{ipversion} != $ipversion);
 
         if (my $iface = $rule->{iface}) {
-            $rule->{iface_in} = $interface_mapping->{$iface} // $iface;
+            $iface = $interface_mapping->{$iface} // $iface;
+            next if !valid_interface_name($iface);
+            $rule->{iface_in} = $iface;
         }
 
         eval {
@@ -3094,7 +3110,9 @@ sub enable_host_firewall {
         next if $rule->{ipversion} && ($rule->{ipversion} != $ipversion);
 
         if (my $iface = $rule->{iface}) {
-            $rule->{iface_out} = $interface_mapping->{$iface} // $iface;
+            $iface = $interface_mapping->{$iface} // $iface;
+            next if !valid_interface_name($iface);
+            $rule->{iface_out} = $iface;
         }
 
         eval {
@@ -4473,6 +4491,8 @@ sub compile_iptables_filter {
                 next if !$net->{firewall};
 
                 my $iface = "tap${vmid}i$1";
+                next if !valid_interface_name($iface);
+
                 my $macaddr = $net->{macaddr};
                 generate_tap_rules_direction(
                     $ruleset,
@@ -4521,6 +4541,8 @@ sub compile_iptables_filter {
                 next if !$net->{firewall};
 
                 my $iface = "veth${vmid}i$1";
+                next if !valid_interface_name($iface);
+
                 my $macaddr = $net->{hwaddr};
                 generate_tap_rules_direction(
                     $ruleset,
@@ -4736,6 +4758,7 @@ sub compile_ebtables_filter {
                 my $net = PVE::QemuServer::Network::parse_net($conf->{$netid});
                 next if !$net->{firewall};
                 my $iface = "tap${vmid}i$1";
+                next if !valid_interface_name($iface);
                 my $macaddr = $net->{macaddr};
                 my $arpfilter = [];
                 if (defined(my $ipset = $ipsets->{"ipfilter-$netid"})) {
@@ -4767,6 +4790,7 @@ sub compile_ebtables_filter {
                 my $net = PVE::LXC::Config->parse_lxc_network($conf->{$netid});
                 next if !$net->{firewall};
                 my $iface = "veth${vmid}i$1";
+                next if !valid_interface_name($iface);
                 my $macaddr = $net->{hwaddr};
                 my $arpfilter = [];
                 if (defined(my $ipset = $ipsets->{"ipfilter-$netid"})) {
