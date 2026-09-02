@@ -213,7 +213,13 @@ sub register_create_ip {
                         my $scope = $1 // "";
                         my $alias = $2;
                         # make sure alias exists (if $cidr is an alias)
-                        PVE::Firewall::resolve_alias($cluster_conf, $fw_conf, $alias, $scope);
+                        my $resolved_cidr =
+                            PVE::Firewall::resolve_alias($cluster_conf, $fw_conf, $alias, $scope);
+
+                        raise_param_exc({
+                            cidr => "a zero prefix alias is not allowed in ipset entries" })
+                            if $resolved_cidr =~ m!/0+$!;
+
                     } else {
                         $cidr = PVE::Firewall::clean_cidr($cidr);
                         # normalize like config parser, otherwise duplicates might slip through

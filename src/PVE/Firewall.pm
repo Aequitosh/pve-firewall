@@ -3662,7 +3662,9 @@ sub generic_fw_config_parser {
                 if ($cidr =~ m@^(dc/|guest/)?(${ip_alias_pattern}$)@) {
                     my $scope = $1 // "";
                     my $alias = $2;
-                    resolve_alias($cluster_conf, $res, $alias, $scope); # make sure alias exists
+                    my $resolved_cidr = resolve_alias($cluster_conf, $res, $alias, $scope); # make sure alias exists
+                    $errors->{cidr} = "a zero prefix is not allowed in ipset entries\n"
+                        if $resolved_cidr =~ m!/0+$!;
                 } else {
                     $cidr = parse_ip_or_cidr($cidr);
                 }
