@@ -3492,6 +3492,8 @@ sub parse_ip_or_cidr {
 
     my $ipversion;
 
+    pve_verify_ip_or_cidr($cidr);
+
     if ($cidr =~ m!^(?:$IPV6RE)(/(\d+))?$!) {
         $cidr =~ s|/128$||;
         $ipversion = 6;
@@ -4678,11 +4680,15 @@ sub compile_ipsets {
                 my $set = $device_ips->{$netid} = [
                     { cidr => $linklocal }, { cidr => 'fe80::/10', nomatch => 1 },
                 ];
-                if (defined($net->{ip}) && $net->{ip} =~ m!^($IPV4RE)(?:/\d+)?$!) {
-                    push @$set, { cidr => $1 };
+                if (defined($net->{ip}) && $net->{ip} =~ m!^($IPV4RE)(?:/\d+)?\z!) {
+                    my $address = $1;
+                    pve_verify_ip_or_cidr($net->{ip});
+                    push @$set, { cidr => $address };
                 }
-                if (defined($net->{ip6}) && $net->{ip6} =~ m!^($IPV6RE)(?:/\d+)?$!) {
-                    push @$set, { cidr => $1 };
+                if (defined($net->{ip6}) && $net->{ip6} =~ m!^($IPV6RE)(?:/\d+)?\z!) {
+                    my $address = $1;
+                    pve_verify_ip_or_cidr($net->{ip6});
+                    push @$set, { cidr => $address };
                 }
             }
 
