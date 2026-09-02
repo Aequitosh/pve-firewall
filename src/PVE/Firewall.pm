@@ -76,7 +76,7 @@ PVE::JSONSchema::register_format('IPorCIDR', \&pve_verify_ip_or_cidr);
 sub pve_verify_ip_or_cidr {
     my ($cidr, $noerr) = @_;
 
-    if ($cidr =~ m!^(?:$IPV6RE|$IPV4RE)(?:/\d+)?$!) {
+    if ($cidr =~ m!^(?:$IPV6RE|$IPV4RE)(?:/\d+)?\z!) {
         # Net::IP throws an error if the masked CIDR part isn't zero, e.g., `192.168.1.155/24`
         # fails but `192.168.1.0/24` succeeds. clean_cidr removes the non zero bits from the CIDR.
         my $clean_cidr = clean_cidr($cidr);
@@ -94,7 +94,7 @@ PVE::JSONSchema::register_format('IPorCIDRorAlias', \&pve_verify_ip_or_cidr_or_a
 sub pve_verify_ip_or_cidr_or_alias {
     my ($cidr, $noerr) = @_;
 
-    return if $cidr =~ m@^(dc/|guest/)?(?:$ip_alias_pattern)$@;
+    return if $cidr =~ m@^(dc/|guest/)?(?:$ip_alias_pattern)\z@;
 
     return pve_verify_ip_or_cidr($cidr, $noerr);
 }
@@ -103,7 +103,7 @@ sub clean_cidr {
     my ($cidr) = @_;
     my ($ip, $len) = split('/', $cidr);
     return $cidr if !$len;
-    my $ver = ($ip =~ m!^$IPV4RE$!) ? 4 : 6;
+    my $ver = ($ip =~ m!^$IPV4RE\z!) ? 4 : 6;
 
     my $bin_ip = Net::IP::ip_iptobin(Net::IP::ip_expand_address($ip, $ver), $ver);
     my $bin_mask = Net::IP::ip_get_mask($len, $ver);
@@ -1104,12 +1104,12 @@ sub compute_ipfilter_ipset_name {
 sub parse_address_list {
     my ($str) = @_;
 
-    if ($str =~ m/^(\+)(\S+)$/) { # ipset ref
+    if ($str =~ m/^(\+)(\S+)\z/) { # ipset ref
         die "ipset name too long\n" if length($str) > ($max_ipset_name_length + 1);
         return;
     }
 
-    if ($str =~ m@^(dc/|guest/)?${ip_alias_pattern}$@) {
+    if ($str =~ m@^(dc/|guest/)?${ip_alias_pattern}\z@) {
         die "alias name too long\n" if length($str) > $max_alias_name_length;
         return;
     }
@@ -1195,14 +1195,14 @@ sub parse_port_name_number_or_range {
     for my $i (0 .. $#elements) {
         my $item = $elements[$i];
 
-        if ($item =~ m/^([0-9]+):([0-9]+)$/) {
+        if ($item =~ m/^([0-9]+):([0-9]+)\z/) {
             $count += 2;
             my ($port1, $port2) = ($1, $2);
             die "invalid port '$port1'\n" if $port1 > 65535;
             die "invalid port '$port2'\n" if $port2 > 65535;
             die "backwards range '$port1:$port2' not allowed, did you mean '$port2:$port1'?\n"
                 if $port1 > $port2;
-        } elsif ($item =~ m/^([0-9]+)$/) {
+        } elsif ($item =~ m/^([0-9]+)\z/) {
             $count += 1;
             my $port = $1;
             die "invalid port '$port'\n" if $port > 65535;
