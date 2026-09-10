@@ -1,3 +1,46 @@
+pve-firewall (6.0.6) trixie; urgency=medium
+
+  * rules: read protocols, services and ethertypes from the new
+    proxmox-firewall-data package instead of the host's netbase files,
+    and pass protocols to iptables by number. A netbase update that
+    drops a name can no longer invalidate existing rules.
+
+  * fix #7584: rules: resolve port aliases in the firewall daemon and
+    use the numeric port independently of the rule's protocol. iptables
+    rejected aliases that are only defined for another protocol, for
+    example bootps on TCP. This also fixes #6318.
+
+  * fix #6992: rules: validate source and destination addresses against
+    the syntax that iptables accepts. Net::IP allowed expressions such
+    as 192.0.2.0/24:1, which passed the API but then kept the whole
+    ruleset from being applied.
+
+  * api: reject addresses and ports with a trailing line break.
+
+  * config: validate CIDR prefixes when reading aliases and IPSet
+    entries from disk, not only in the API, so an invalid prefix cannot
+    block ruleset updates.
+
+  * fix #5535: ipset: resolve aliases when adding entries and when
+    generating commands, so an alias for 0.0.0.0/0 no longer produces
+    an invalid ipset.
+
+  * rules: log and skip only the affected rule or guest interface if an
+    interface name exceeds the 15 byte limit that iptables enforces,
+    instead of failing to apply the whole ruleset.
+
+  * config: warn about and skip rules with an invalid type when writing
+    the configuration. Two such rules previously made the configuration
+    unfixable through the API and web interface.
+
+  * apply: include the full diagnostic output in the system log when
+    restoring a ruleset fails, instead of only its last line.
+
+  * compile: log errors from every compile step to the system log, not
+    only those for VMs.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 10 Sep 2026 19:50:42 +0200
+
 pve-firewall (6.0.5) trixie; urgency=medium
 
   * api schema: add missing descriptions
